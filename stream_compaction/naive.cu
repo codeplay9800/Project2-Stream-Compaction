@@ -22,11 +22,10 @@ namespace StreamCompaction {
 		__global__ void performScan(int d, int* buf1, int* buf2, int N)
 		{
 			int index = (blockIdx.x * blockDim.x) + threadIdx.x;
-			if (index > N - 1)
+			if (index > N-1)
 			{
 				return;
 			}
-			//int pow2_d = pow(2, d);
 			int pow2_dminus1 = pow(2, d - 1);
 			if (index >= pow2_dminus1)
 			{
@@ -36,6 +35,22 @@ namespace StreamCompaction {
 			{
 				buf2[index] = buf1[index];
 			}
+
+		}
+
+		__global__ void ShiftRight(int* buf1, int* buf2, int N)
+		{
+			int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+			if (index > N - 1)
+			{
+				return;
+			}
+			if (index == 0)
+			{
+				buf2[index] = 0;
+				return;
+			}
+			buf2[index] = buf1[index - 1];
 
 		}
 
@@ -60,7 +75,7 @@ namespace StreamCompaction {
 			timer().startGpuTimer();
 			// TODO
 
-			int power2 = 1;
+			/*int power2 = 1;
 			int nearesttwo = 2;
 
 			for (int i = 0; i < n; i++)
@@ -94,7 +109,7 @@ namespace StreamCompaction {
 			for (int i = 0; i < n; i++)
 			{
 				arr_z[i + difference] = idata[i];
-			}
+			}*/
 
 	/*		printf(" \n Array Before:");
 			for (int i = 0; i < finalMemSize; i++)
@@ -102,21 +117,22 @@ namespace StreamCompaction {
 				printf("%3d ", arr_z[i]);
 			}
 			printf("\n");*/
-			int d = ilog2(finalMemSize);
-			AllocateMemory(finalMemSize);
-			cudaMemcpy(dev_buf1, arr_z, sizeof(int) * finalMemSize, cudaMemcpyHostToDevice);
+			int d = ilog2ceil(n);
+			AllocateMemory(n);
+			cudaMemcpy(dev_buf1, idata, sizeof(int) * n, cudaMemcpyHostToDevice);
 
-			dim3 fullBlocksPerGrid((finalMemSize + blockSize - 1) / blockSize);
+			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 			cudaDeviceSynchronize();
 			for (int i = 1; i <= d; i++)
 			{
-				performScan << < fullBlocksPerGrid, blockSize >> > (i, dev_buf1, dev_buf2, finalMemSize);
+				performScan << < fullBlocksPerGrid, blockSize >> > (i, dev_buf1, dev_buf2, n);
 				cudaDeviceSynchronize();
 				std::swap(dev_buf1, dev_buf2);
 			}
 
-		
-				cudaMemcpy(arr_z, dev_buf1, sizeof(int) * finalMemSize, cudaMemcpyDeviceToHost);
+			ShiftRight << < fullBlocksPerGrid, blockSize >> > (dev_buf1, dev_buf2, n);
+
+			cudaMemcpy(odata, dev_buf2, sizeof(int) * n, cudaMemcpyDeviceToHost);
 
 
 		/*	printf(" \n Array After:");
@@ -125,27 +141,11 @@ namespace StreamCompaction {
 				printf("%3d ", arr_z[i]);
 			}
 			printf("\n");*/
-		    printf("%3d ", arr_z[2046]);
-			printf("\n");
-		    printf("%3d ", arr_z[2048]);
-			for (int i = 0; i < n; i++)
-			{
-				odata[i] = arr_z[i + difference];
-			}
-			cudaDeviceSynchronize();
-			//rightshift
-			for (int i = n - 1; i >= 1; i--)
-			{
-				odata[i] = odata[i - 1];
-			}
-
-
-			odata[0] = 0;
-			/*printf(" \n Array After:");*/
-			/*for (int i = 0; i < finalMemSize; i++)
-			{
-				printf("%3d ", arr_z[i]);
-			}*/
+			//printf(" \n Array After:");
+			//for (int i = 0; i < n; i++)
+			//{
+			//	printf("%3d ", odata[i]);
+			//}
 
 			/*	 printf("]\n");
 				 for (int i = 0; i < n; i++)
